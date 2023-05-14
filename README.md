@@ -5,65 +5,14 @@ Language: **English** [简体中文](./cn_README.md) [한국어](./ko_README.md)
 </div>
 Real-time end-to-end singing voice conversion system based on DDSP (Differentiable Digital Signal Processing）.
 
-## (3.0 - Update) Shallow diffusion model (DDSP + Diff-SVC refactor version)
-![Diagram](diagram.png)
-
-Data preparation, configuring the pre-trained encoder (hubert or contentvec ) and vocoder (nsf-hifigan) is the same as training a pure DDSP model.
-
-Because the diffusion model is more difficult to train, we provide some pre-trained models here:
-
-https://huggingface.co/datasets/ms903/Diff-SVC-refactor-pre-trained-model/blob/main/hubertsoft_fix_pitch_add_vctk_500k/model_0.pt (using 'hubertsoft' encoder)
-
-https://huggingface.co/datasets/ms903/Diff-SVC-refactor-pre-trained-model/blob/main/fix_pitch_add_vctk_600k/model_0.pt (using 'contentvec768l12' encoder)
-
-Move the `model_0.pt` to the model export folder specified by the 'expdir' parameter in `diffusion.yaml`, and the program will automatically load the pre-trained models in that folder.
-
-(1) Preprocessing：
-```bash
-python preprocess.py -c configs/diffusion.yaml
-```
-This preprocessing can also be used to train the DDSP model without preprocessing twice, but you need to ensure that the parameters under the 'data' tag in yaml files are consistent.
-
-(2) Train a diffusion model：
-```bash
-python train_diff.py -c configs/diffusion.yaml
-```
-(3) Train a DDSP model：
-```bash
-python train.py -c configs/combsub.yaml
-```
-As mentioned above, re-preprocessing is not required, but please check whether the parameters of `combsub.yaml` and `diffusion.yaml` match. The number of speakers 'n_spk' can be inconsistent, but try to use the same id to represent the same speaker (this makes inference easier).
-
-(4) Non-real-time inference：
-```bash
-python main_diff.py -i <input.wav> -ddsp <ddsp_ckpt.pt> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
-```
-
-'speedup' is the acceleration speed, 'method' is 'pndm' or 'dpm-solver', 'kstep' is the number of shallow diffusion steps, 'diffid' is the speaker id of the diffusion model, and other parameters have the same meaning as `main.py`.
-
-A reasonable 'kstep' is about 100~300. There may be a perceived loss of sound quality when ‘speedup’ exceeds 20.
-
-If the same id has been used to represent the same speaker during training, '-diffid' can be empty, otherwise the '-diffid' option needs to be specified.
-
-If '-ddsp' is empty, the pure diffusion model is used, at this time, shallow diffusion is performed with the mel of the input source, and if further '-kstep' is empty, full-depth Gaussian diffusion is performed.
-
-The program will automatically check whether the parameters of the DDSP model and the diffusion model match (sampling rate, hop size and encoder), and if they do not match, it will ignore loading the DDSP model and enter Gaussian diffusion mode.
-
-(5) Real-time GUI：
-```bash
-python gui_diff.py
-```
-
 ## 0. Introduction
 DDSP-SVC is a new open source singing voice conversion project dedicated to the development of free AI voice changer software that can be popularized on personal computers.
 
-Compared with the famous [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc),  its training and synthesis have much lower requirements for computer hardware, and the training time can be shortened by orders of magnitude, which is close to the training speed of [RVC](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI).
+Compared with the more famous [Diff-SVC](https://github.com/prophesier/diff-svc) and [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc),  its training and synthesis have much lower requirements for computer hardware, and the training time can be shortened by orders of magnitude. In addition, when performing voice change in real-time, the hardware resources of this project are significantly lower than SO-VITS-SVC, and Diff-SVC is too slow to perform voice change in real-time.
 
-In addition, when performing real-time voice changing, the hardware resource consumption of this project is significantly lower than that of SO-VITS-SVC and RVC, and a lower delay can be achieved by tuning parameters on the same hardware configuration.
+Although the original synthesis quality of DDSP is not ideal (the original output can be heard in tensorboard while training), after using the pre-trained vocoder-based enhancer, the sound quality for some dateset can reach a level close to SO-VITS-SVC.
 
-Although the original synthesis quality of DDSP is not ideal (the original output can be heard in tensorboard while training), after enhancing the sound quality with a pre-trained vocoder based enhancer (old version) or with a shallow diffusion model (new version) , for some data sets, it can achieve the synthesis quality no less than SOVITS-SVC and RVC. The demo outputs are in the `samples` folder,  and the related model checkpoint can be downloaded from the release page.
-
-The old version models are still compatible, the following chapters are the instructions for the old version. Some operations of the new version are the same, see the previous chapter.
+If the quality of the training data is very high, probably still Diff-SVC will have the highest sound quality. The demo outputs are in the `samples` folder,  and the related model checkpoint can be downloaded from the release page.
 
 Disclaimer: Please make sure to only train DDSP-SVC models with **legally obtained authorized data**, and do not use these models and any audio they synthesize for illegal purposes. The author of this repository is not responsible for any infringement, fraud and other illegal acts caused by the use of these model checkpoints and audio.
 
@@ -78,14 +27,9 @@ NOTE : I only test the code using python 3.8 (windows) + torch 1.9.1 + torchaudi
 
 UPDATE: python 3.8 (windows) + cuda 11.8 + torch 2.0.0 + torchaudio 2.0.1 works, and training is faster.
 ## 2. Configuring the pretrained model
-- Feature Encoder (choose only one):
-
- (1) Download the pre-trained [**ContentVec**](https://ibm.ent.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr) encoder and put it under  `pretrain/contentvec` folder.
-
-(2) Download the pre-trained [**HubertSoft**](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt) encoder and put it under `pretrain/hubert` folder, and then modify the configuration file at the same time.
-- Vocoder or enhancer:
-
-Download the pre-trained [NSF-HiFiGAN](https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-v1/nsf_hifigan_20221211.zip) vocoder and unzip it into `pretrain/` folder.
+UPDATE:  ContentVec encoder is supported now. You can download the pretrained [ContentVec](https://ibm.ent.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr) encoder instead of HubertSoft encoder and modify the configuration file to use it.
+- **(Required)** Download the pretrained [**HubertSoft**](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt)   encoder and put it under `pretrain/hubert` folder.
+-  Get the pretrained vocoder-based enhancer from the [DiffSinger Community Vocoders Project](https://openvpi.github.io/vocoders) and unzip it into `pretrain/` folder
 ## 3. Preprocessing
 
 Put all the training dataset (.wav format audio clips) in the below directory:
@@ -203,7 +147,4 @@ Update: A splicing algorithm based on a phase vocoder is now added, but in most 
 * [ddsp](https://github.com/magenta/ddsp)
 * [pc-ddsp](https://github.com/yxlllc/pc-ddsp)
 * [soft-vc](https://github.com/bshall/soft-vc)
-* [ContentVec](https://github.com/auspicious3000/contentvec)
 * [DiffSinger (OpenVPI version)](https://github.com/openvpi/DiffSinger)
-* [Diff-SVC](https://github.com/prophesier/diff-svc)
-

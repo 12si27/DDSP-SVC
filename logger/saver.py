@@ -116,15 +116,10 @@ class Saver(object):
         print(' [*] model checkpoint saved: {}'.format(path_pt))
 
         # save
-        if optimizer is not None:
-            torch.save({
-                'global_step': self.global_step,
-                'model': model.state_dict(),
-                'optimizer': optimizer.state_dict()}, path_pt)
-        else:
-            torch.save({
-                'global_step': self.global_step,
-                'model': model.state_dict()}, path_pt)
+        torch.save({
+            'global_step': self.global_step,
+            'model': model.state_dict(),
+            'optimizer': optimizer.state_dict()}, path_pt)
             
         # to json
         if to_json:

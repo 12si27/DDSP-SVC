@@ -41,7 +41,7 @@ def parse_args(args=None, namespace=None):
         "--ddsp_ckpt",
         type=str,
         required=False,
-        default=None,
+        default="None",
         help="path to the DDSP model checkpoint (for shallow diffusion)",
     )
     parser.add_argument(
@@ -248,7 +248,7 @@ if __name__ == '__main__':
     f0 = f0 * 2 ** (float(cmd.key) / 12)
     
     # formant change
-    formant_shift_key = torch.from_numpy(np.array([[float(cmd.formant_shift_key)]])).float().to(device)
+    formant_shift_key = torch.LongTensor(np.array([[int(cmd.formant_shift_key)]])).to(device)
     
     # extract volume 
     print('Extracting the volume envelope of the input audio...')
@@ -308,7 +308,7 @@ if __name__ == '__main__':
     if cmd.k_step is not None:
         k_step = int(cmd.k_step)
         print('Shallow diffusion step: ' + str(k_step))
-        if cmd.ddsp_ckpt is not None:
+        if cmd.ddsp_ckpt != "None":
             # load ddsp model
             ddsp, ddsp_args = load_model(cmd.ddsp_ckpt, device=device)
             if not check_args(ddsp_args, args):
@@ -337,9 +337,8 @@ if __name__ == '__main__':
             seg_f0 = f0[:, start_frame : start_frame + seg_units.size(1), :]
             seg_volume = volume[:, start_frame : start_frame + seg_units.size(1), :]
             if ddsp is not None:
-                seg_ddsp_f0 = 2 ** (-float(cmd.formant_shift_key) / 12) * seg_f0
-                seg_ddsp_output, _ , (_, _) = ddsp(seg_units, seg_ddsp_f0, seg_volume, spk_id = spk_id, spk_mix_dict = spk_mix_dict)
-                seg_input_mel = vocoder.extract(seg_ddsp_output, args.data.sampling_rate, keyshift=float(cmd.formant_shift_key))
+                seg_ddsp_output, _ , (_, _) = ddsp(seg_units, seg_f0, seg_volume, spk_id = spk_id, spk_mix_dict = spk_mix_dict)
+                seg_input_mel = vocoder.extract(seg_ddsp_output, args.data.sampling_rate)
             elif input_mel != None:
                 seg_input_mel = input_mel[:, start_frame : start_frame + seg_units.size(1), :]
             else:

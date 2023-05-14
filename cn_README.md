@@ -5,42 +5,28 @@ Language: [English](./README.md) **简体中文**
 </div>
 基于 DDSP（可微分数字信号处理）的实时端到端歌声转换系统
 
-## （3.0 升级）浅扩散模型 （DDSP + Diff-SVC 重构版）
-![Diagram](diagram.png)
-
-数据准备，配置编码器（hubert 或者 contentvec ) 与声码器 (nsf-hifigan) 的环节与训练纯 DDSP 模型相同。
-
-因为扩散模型更难训练，我们提供了一些预训练模型：
-
-https://huggingface.co/datasets/ms903/Diff-SVC-refactor-pre-trained-model/blob/main/hubertsoft_fix_pitch_add_vctk_500k/model_0.pt (使用 'hubertsoft' 编码器)
-
-https://huggingface.co/datasets/ms903/Diff-SVC-refactor-pre-trained-model/blob/main/fix_pitch_add_vctk_600k/model_0.pt (使用 'contentvec768l12' 编码器)
-
-将名为`model_0.pt`的预训练模型, 放到`diffusion.yaml`里面 "expdir: exp/*****" 参数指定的模型导出文件夹内, 没有就新建一个, 程序会自动加载该文件夹下的预训练模型。
-
-（1）预处理：
+## （实验性）浅扩散模型 （DDSP + Diff-SVC 重构版）
+预处理：
 ```bash
 python preprocess.py -c configs/diffusion.yaml
 ```
 这个预处理也能用来训练 DDSP 模型，不用预处理两遍（但需要保证 yaml 里面的 data 下面的参数均一致）
 
-（2）训练扩散模型：
+训练扩散模型：
 ```bash
 python train_diff.py -c configs/diffusion.yaml
 ```
-（3）训练 DDSP 模型：
+训练 DDSP 模型：
 ```bash
 python train.py -c configs/combsub.yaml
 ```
 如上所述，可以不需要重新预处理，但请检查 combsub.yaml 与 diffusion.yaml 是否参数匹配。说话人数 n_spk 可以不一致，但是尽量用相同的编号表示相同的说话人（推理更简单）。
 
-（4）非实时推理：
+推理：
 ```bash
 python main_diff.py -i <input.wav> -ddsp <ddsp_ckpt.pt> -diff <diff_ckpt.pt> -o <output.wav> -k <keychange (semitones)> -id <speaker_id> -diffid <diffusion_speaker_id> -speedup <speedup> -method <method> -kstep <kstep>
 ```
-speedup 为加速倍速，method 为 pndm 或者 dpm-solver, kstep 为浅扩散步数，diffid 为扩散模型的说话人id，其他参数与 main.py 含义相同。
-
-合理的 kstep 约为 100~300，speedup 超过 20 时可能将感知到音质损失。
+speedup 为加速倍速，method 为 pndm 或者 dpm-solver, kstep为浅扩散步数，diffid 为扩散模型的说话人id，其他参数与 main.py 含义相同。
 
 如果训练时已经用相同的编号表示相同的说话人，则 -diffid 可以为空，否则需要指定 -diffid 选项。
 
@@ -48,29 +34,20 @@ speedup 为加速倍速，method 为 pndm 或者 dpm-solver, kstep 为浅扩散�
 
 程序会自动检查 DDSP 模型和扩散模型的参数是否匹配 （采样率，帧长和编码器），不匹配会忽略加载 DDSP 模型并进入高斯扩散模式。
 
-（5）实时 GUI :
-```bash
-python gui_diff.py
-```
-
 ## 0.简介
 DDSP-SVC 是一个新的开源歌声转换项目，致力于开发可以在个人电脑上普及的自由 AI 变声器软件。
 
-相比于著名的 [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc), 它训练和合成对电脑硬件的要求要低的多，并且训练时长有数量级的缩短，和 [RVC](https://github.com/RVC-Project/Retrieval-based-Voice-Conversion-WebUI) 的训练速度接近。
+相比于比较著名的 [Diff-SVC](https://github.com/prophesier/diff-svc) 和 [SO-VITS-SVC](https://github.com/svc-develop-team/so-vits-svc), 它训练和合成对电脑硬件的要求要低的多，并且训练时长有数量级的缩短。另外在进行实时变声时，本项目的硬件资源显著低于 SO-VITS-SVC，而 Diff-SVC 合成太慢几乎无法进行实时变声。
 
-另外在进行实时变声时，本项目的硬件资源消耗显著低于 SO-VITS-SVC 和 RVC，在相同的硬件配置上经过调参可以达到更低的延迟。
+虽然 DDSP 的原始合成质量不是很理想（训练时在 tensorboard 中可以听到原始输出），但在使用基于预训练声码器的增强器增强音质后，对于部分数据集可以达到接近 SOVITS-SVC 的合成质量。
 
-虽然 DDSP 的原始合成质量不是很理想（训练时在 tensorboard 中可以听到原始输出），但在使用基于预训练声码器的增强器（老版本）或使用浅扩散模型（新版本）增强音质后，对于部分数据集可以达到不亚于 SOVITS-SVC 和 RVC 的合成质量。在`samples`文件夹中包含一个合成示例，相关模型检查点可以从仓库发布页面下载。
-
-老版本的模型仍然兼容的，以下章节是老版本的使用说明。新版本部分操作是相同的，见上一章节。
+如果训练数据的质量非常高，可能仍然 Diff-SVC 将拥有最高的合成质量。在`samples`文件夹中包含合成示例，相关模型检查点可以从仓库发布页面下载。
 
 免责声明：请确保仅使用**合法获得的授权数据**训练 DDSP-SVC 模型，不要将这些模型及其合成的任何音频用于非法目的。 本库作者不对因使用这些模型检查点和音频而造成的任何侵权，诈骗等违法行为负责。
 
 1.1 更新：支持多说话人和音色混合。
 
 2.0 更新：开始支持实时 vst 插件，并优化了 combsub 模型， 训练速度极大提升。旧的 combsub 模型仍然兼容，可用 combsub-old.yaml 训练，sins 模型不受影响，但由于训练速度远慢于 combsub, 目前版本已经不推荐使用。
-
-3.0 更新：由于作者删库 vst 插件取消支持，转为使用独立的实时变声前端；支持多种编码器，并将 contentvec768l12 作为默认编码器；引入浅扩散模型，合成质量极大提升。
 
 ## 1. 安装依赖
 1. 安装PyTorch：我们推荐从 [**PyTorch 官方网站 **](https://pytorch.org/) 下载 PyTorch.
@@ -83,15 +60,10 @@ pip install -r requirements.txt
 
 更新：python 3.8 (windows) + cuda 11.8 + torch 2.0.0 + torchaudio 2.0.1 可以运行，训练速度更快了。
 ## 2. 配置预训练模型
-  - 特征编码器 (可只选其一)：
-
- (1) 下载预训练 [**ContentVec**](https://ibm.ent.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr) 编码器并将其放到 `pretrain/contentvec` 文件夹。
-  
-  (2) 下载预训练 [**HubertSoft**](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt) 编码器并将其放到 `pretrain/hubert` 文件夹，同时修改配置文件。
-- 声码器或增强器：
-
-下载预训练 [NSF-HiFiGAN](https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-v1/nsf_hifigan_20221211.zip) 声码器并解压至 `pretrain/` 文件夹。
-
+- **(必要操作)** 下载预训练 [**HubertSoft**](https://github.com/bshall/hubert/releases/download/v0.1/hubert-soft-0d54a1f4.pt) 编码器并将其放到 `pretrain/hubert` 文件夹。
+  - 更新：现在支持 ContentVec 编码器了。你可以下载预训练 [ContentVec](https://ibm.ent.box.com/s/z1wgl1stco8ffooyatzdwsqn2psd9lrr) 编码器替代 HubertSoft 编码器并修改配置文件以使用它。
+- 从 [DiffSinger 社区声码器项目](https://openvpi.github.io/vocoders) 下载基于预训练声码器的增强器，并解压至 `pretrain/` 文件夹。
+  -  注意：你应当下载名称中带有`nsf_hifigan`的压缩文件，而非`nsf_hifigan_finetune`。
 ## 3. 预处理
 
 ### 1. 配置训练数据集和验证数据集
@@ -137,9 +109,8 @@ data
 │    │    │   ├─ ddd.wav
 │    │    │   └─ ....wav
 │    │    └─ ...
-|
-├─ val
-|    ├─ audio
+└─ val
+│    ├─ audio
 │    │    ├─ 1
 │    │    │   ├─ eee.wav
 │    │    │   ├─ fff.wav
@@ -235,6 +206,4 @@ python gui.py
 * [ddsp](https://github.com/magenta/ddsp)
 * [pc-ddsp](https://github.com/yxlllc/pc-ddsp)
 * [soft-vc](https://github.com/bshall/soft-vc)
-* [ContentVec](https://github.com/auspicious3000/contentvec)
 * [DiffSinger (OpenVPI version)](https://github.com/openvpi/DiffSinger)
-* [Diff-SVC](https://github.com/prophesier/diff-svc)

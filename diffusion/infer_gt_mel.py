@@ -32,9 +32,13 @@ class DiffGtMel:
             raise ValueError("DDSP与DIFF模型的encoder不一致")
         return True
 
-    def __call__(self, audio, f0, hubert, volume, acc=1, spk_id=1, k_step=0, method='pndm',
+    def __call__(self, audio, f0, hubert, volume, acc=1, spk_id=1, k_step=0, use_dpm=True,
                  spk_mix_dict=None, start_frame=0):
         input_mel = self.vocoder.extract(audio, self.args.data.sampling_rate)
+        if use_dpm:
+            method = 'dpm-solver'
+        else:
+            method = 'pndm'
         out_mel = self.model(
             hubert,
             f0,
@@ -55,7 +59,7 @@ class DiffGtMel:
             output = F.pad(output, (start_frame * self.vocoder.vocoder_hop_size, 0))
         return output
 
-    def infer(self, audio, f0, hubert, volume, acc=1, spk_id=1, k_step=0, method='pndm', silence_front=0,
+    def infer(self, audio, f0, hubert, volume, acc=1, spk_id=1, k_step=0, use_dpm=True, silence_front=0,
               use_silence=False, spk_mix_dict=None):
         start_frame = int(silence_front * self.vocoder.vocoder_sample_rate / self.vocoder.vocoder_hop_size)
         if use_silence:
@@ -67,7 +71,7 @@ class DiffGtMel:
         else:
             _start_frame = start_frame
         audio = self.__call__(audio, f0, hubert, volume, acc=acc, spk_id=spk_id, k_step=k_step,
-                              method=method, spk_mix_dict=spk_mix_dict, start_frame=_start_frame)
+                              use_dpm=use_dpm, spk_mix_dict=spk_mix_dict, start_frame=_start_frame)
         if use_silence:
             if start_frame > 0:
                 audio = F.pad(audio, (start_frame * self.vocoder.vocoder_hop_size, 0))

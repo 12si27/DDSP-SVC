@@ -5,8 +5,6 @@ import torch
 import librosa
 from logger.saver import Saver
 from logger import utils
-from torch import autocast
-from torch.cuda.amp import GradScaler
 
 def test(args, model, vocoder, loader_test, saver):
     print(' [*] testing...')
@@ -28,7 +26,7 @@ def test(args, model, vocoder, loader_test, saver):
 
             # unpack data
             for k in data.keys():
-                if not k.startswith('name'):
+                if k != 'name':
                     data[k] = data[k].to(args.device)
             print('>>', data['name'][0])
 
@@ -68,7 +66,7 @@ def test(args, model, vocoder, loader_test, saver):
             saver.log_spec(data['name'][0], data['mel'], mel)
             
             # log audio
-            path_audio = os.path.join(args.data.valid_path, 'audio', data['name_ext'][0])
+            path_audio = os.path.join(args.data.valid_path, 'audio', data['name'][0]) + '.wav'
             audio, sr = librosa.load(path_audio, sr=args.data.sampling_rate)
             if len(audio.shape) > 1:
                 audio = librosa.to_mono(audio)
@@ -98,15 +96,6 @@ def train(args, initial_global_step, model, optimizer, scheduler, vocoder, loade
     num_batches = len(loader_train)
     model.train()
     saver.log_info('======= start training =======')
-    scaler = GradScaler()
-    if args.train.amp_dtype == 'fp32':
-        dtype = torch.float32
-    elif args.train.amp_dtype == 'fp16':
-        dtype = torch.float16
-    elif args.train.amp_dtype == 'bf16':
-        dtype = torch.bfloat16
-    else:
-        raise ValueError(' [x] Unknown amp_dtype: ' + args.train.amp_dtype)
     for epoch in range(args.train.epochs):
         for batch_idx, data in enumerate(loader_train):
             saver.global_step_increment()
@@ -114,30 +103,20 @@ def train(args, initial_global_step, model, optimizer, scheduler, vocoder, loade
 
             # unpack data
             for k in data.keys():
-                if not k.startswith('name'):
+                if k != 'name':
                     data[k] = data[k].to(args.device)
             
             # forward
-            if dtype == torch.float32:
-                loss = model(data['units'].float(), data['f0'], data['volume'], data['spk_id'], 
-                                aug_shift = data['aug_shift'], gt_spec=data['mel'].float(), infer=False)
-            else:
-                with autocast(device_type=args.device, dtype=dtype):
-                    loss = model(data['units'], data['f0'], data['volume'], data['spk_id'], 
-                                    aug_shift = data['aug_shift'], gt_spec=data['mel'], infer=False)
+            loss = model(data['units'].float(), data['f0'], data['volume'], data['spk_id'], 
+                            aug_shift = data['aug_shift'], gt_spec=data['mel'].float(), infer=False)
             
             # handle nan loss
             if torch.isnan(loss):
                 raise ValueError(' [x] nan loss ')
             else:
                 # backpropagate
-                if dtype == torch.float32:
-                    loss.backward()
-                    optimizer.step()
-                else:
-                    scaler.scale(loss).backward()
-                    scaler.step(optimizer)
-                    scaler.update()
+                loss.backward()
+                optimizer.step()
                 scheduler.step()
                 
             # log loss
@@ -167,18 +146,16 @@ def train(args, initial_global_step, model, optimizer, scheduler, vocoder, loade
             
             # validation
             if saver.global_step % args.train.interval_val == 0:
-                optimizer_save = optimizer if args.train.save_opt else None
-                
                 # save latest
-                saver.save_model(model, optimizer_save, postfix=f'{saver.global_step}')
+                saver.save_model(model, optimizer, postfix=f'{saver.global_step}')
                 last_val_step = saver.global_step - args.train.interval_val
                 if last_val_step % args.train.interval_force_save != 0:
                     saver.delete_model(postfix=f'{last_val_step}')
                 
                 # run testing set
-                test_loss = test(args, model, vocoder, loader_test, saver)
                 
-                # log loss
+                test_loss = test(args, model, vocoder, loader_test, saver)
+             
                 saver.log_info(
                     ' --- <validation> --- \nloss: {:.3f}. '.format(
                         test_loss,

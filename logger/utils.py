@@ -6,7 +6,7 @@ import torch
 
 def traverse_dir(
         root_dir,
-        extensions,
+        extension,
         amount=None,
         str_include=None,
         str_exclude=None,
@@ -18,7 +18,7 @@ def traverse_dir(
     cnt = 0
     for root, _, files in os.walk(root_dir):
         for file in files:
-            if any([file.endswith(f".{ext}") for ext in extensions]):
+            if file.endswith(extension):
                 # path
                 mix_path = os.path.join(root, file)
                 pure_path = mix_path[len(root_dir)+1:] if is_pure else mix_path
@@ -104,7 +104,7 @@ def load_model(
     if postfix == '':
         postfix = '_' + postfix
     path = os.path.join(expdir, name+postfix)
-    path_pt = traverse_dir(expdir, ['pt'], is_ext=False)
+    path_pt = traverse_dir(expdir, '.pt', is_ext=False)
     global_step = 0
     if len(path_pt) > 0:
         steps = [s[len(path):] for s in path_pt]
@@ -117,6 +117,6 @@ def load_model(
         ckpt = torch.load(path_pt, map_location=torch.device(device))
         global_step = ckpt['global_step']
         model.load_state_dict(ckpt['model'], strict=False)
-        if ckpt.get('optimizer') != None:
+        if maxstep != 0:
             optimizer.load_state_dict(ckpt['optimizer'])
     return global_step, model, optimizer
